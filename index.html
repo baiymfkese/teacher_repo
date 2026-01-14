@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教师信息管理系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-enter-active,
+        .fade-leave-active {
+            transition: opacity 0.3s;
+        }
+        .fade-enter-from,
+        .fade-leave-to {
+            opacity: 0;
+        }
+        .slide-enter-active,
+        .slide-leave-active {
+            transition: all 0.3s ease;
+        }
+        .slide-enter-from {
+            transform: translateY(-20px);
+            opacity: 0;
+        }
+        .slide-leave-to {
+            transform: translateY(20px);
+            opacity: 0;
+        }
+        
+        /* 通知过渡动画 */
+        .notification-enter-active,
+        .notification-leave-active {
+            transition: all 0.3s ease;
+        }
+        .notification-enter-from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        .notification-leave-to {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        .notification-move {
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 配置说明 -->
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong class="font-medium">Supabase配置说明：</strong>
+                        请确保已在Supabase控制台配置了正确的行级安全策略。
+                        <button @click="showSecurityRules" class="text-blue-600 hover:text-blue-800 font-medium">
+                            查看配置指南
+                        </button>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Realtime调试信息模态框 -->
+        <div v-if="showDebugModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-xl font-semibold text-gray-900">Realtime调试信息</h3>
+                    <button @click="showDebugModal = false" class="text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-y-auto max-h-[70vh] p-2">
+                    <div class="text-gray-700 space-y-4">
+                        <div>
+                            <h4 class="font-medium text-lg mb-2">Realtime状态信息</h4>
+                            <div class="bg-gray-50 p-4 rounded-md">
+                                <pre class="text-sm">
+当前状态：{{ realtimeStatus === 'SUBSCRIBED' ? '已连接' : '未连接' }}
+状态代码：{{ realtimeStatus }}
+Supabase URL：{{ supabaseUrl }}
+连接时间：{{ new Date().toLocaleString() }}
+                                </pre>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-medium text-lg mb-2">Realtime配置检查清单</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center">
+                                    <input type="checkbox" disabled :checked="realtimeStatus === 'SUBSCRIBED'" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    <span>Realtime连接已建立</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="checkbox" disabled class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    <span>teachers表已启用Realtime功能</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="checkbox" disabled :checked="realtimeStatus === 'SUBSCRIBED'" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    <span>行级安全策略已配置</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="checkbox" disabled class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    <span>Supabase项目Realtime服务已启用</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-medium text-lg mb-2">故障排除指南</h4>
+                            <div class="bg-yellow-50 p-4 rounded-md">
+                                <ol class="list-decimal list-inside space-y-2">
+                                    <li>检查Supabase控制台中项目的Realtime服务是否已启用</li>
+                                    <li>确保teachers表已启用Realtime功能（在表设置中）</li>
+                                    <li>验证行级安全策略是否允许相应的操作</li>
+                                    <li>检查浏览器控制台是否有相关错误信息</li>
+                                    <li>尝试刷新页面重新建立连接</li>
+                                    <li>确保网络连接正常，没有防火墙阻止WebSocket连接</li>
+                                </ol>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-medium text-lg mb-2">Supabase控制台操作步骤</h4>
+                            <div class="bg-gray-50 p-4 rounded-md">
+                                <ol class="list-decimal list-inside space-y-2">
+                                    <li>登录Supabase控制台，进入您的项目</li>
+                                    <li>点击左侧菜单的"Database"，然后选择"Tables and Views"</li>
+                                    <li>找到"teachers"表，点击进入</li>
+                                    <li>点击"Settings"标签页</li>
+                                    <li>在"Realtime"部分，确保"Enabled"选项已勾选</li>
+                                    <li>点击"Save"保存设置</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end pt-2 space-x-2">
+                    <button @click="testRealtimeConnection" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        测试连接
+                    </button>
+                    <button @click="showDebugModal = false" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Realtime状态检查 -->
+        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-blue-700">
+                        <strong class="font-medium">Realtime状态：</strong>
+                        <span :class="realtimeStatus === 'SUBSCRIBED' ? 'text-green-600' : 'text-red-600'">
+                            {{ realtimeStatus === 'SUBSCRIBED' ? '已连接' : '未连接' }}
+                        </span>
+                        <button @click="testRealtimeConnection" class="ml-4 text-blue-600 hover:text-blue-800 font-medium">
+                            测试连接
+                        </button>
+                        <button @click="showRealtimeDebug" class="ml-2 text-blue-600 hover:text-blue-800 font-medium">
+                            调试信息
+                        </button>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 安全规则配置指南模态框 -->
+        <div v-if="showRulesModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-xl font-semibold text-gray-900">Supabase行级安全策略配置指南</h3>
+                    <button @click="showRulesModal = false" class="text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-y-auto max-h-[70vh] p-2">
+                    <div class="text-gray-700">
+                        <h4 class="font-medium text-lg mb-2">步骤1：登录Supabase控制台</h4>
+                        <p class="mb-4">访问 <a href="https://app.supabase.io" class="text-blue-600 hover:text-blue-800">https://app.supabase.io</a> 并登录您的账号。</p>
+                        
+                        <h4 class="font-medium text-lg mb-2">步骤2：选择您的项目</h4>
+                        <p class="mb-4">点击您正在使用的项目（应该是包含 'uunvxxregycemnpiwoaz' 这一标识符的项目）。</p>
+                        
+                        <h4 class="font-medium text-lg mb-2">步骤3：打开行级安全策略配置</h4>
+                        <ol class="list-decimal list-inside mb-4 space-y-2">
+                            <li>在左侧菜单中点击 "Database"（数据库）</li>
+                            <li>在数据库菜单下选择 "Tables and Views"（表和视图）</li>
+                            <li>在表列表中找到并点击 "teachers" 表</li>
+                            <li>进入teachers表后，点击顶部的 "Policies"（策略）标签页</li>
+                        </ol>
+                        
+                        <h4 class="font-medium text-lg mb-2">步骤4：配置访问策略</h4>
+                        <p class="mb-2">点击 "New Policy" 按钮，创建以下策略：</p>
+                        
+                        <h5 class="font-medium text-md mb-2">策略1：允许所有用户查看教师数据</h5>
+                        <div class="bg-gray-50 p-4 rounded-md mb-4 overflow-x-auto">
+                            <pre class="text-sm">
+-- 策略名称：允许查看教师数据
+-- 策略类型：SELECT
+-- 定义：
+(true)
+                            </pre>
+                        </div>
+                        
+                        <h5 class="font-medium text-md mb-2">策略2：允许所有用户添加教师数据</h5>
+                        <div class="bg-gray-50 p-4 rounded-md mb-4 overflow-x-auto">
+                            <pre class="text-sm">
+-- 策略名称：允许添加教师数据
+-- 策略类型：INSERT
+-- 定义：
+(true)
+                            </pre>
+                        </div>
+                        
+                        <h5 class="font-medium text-md mb-2">策略3：允许所有用户删除教师数据</h5>
+                        <div class="bg-gray-50 p-4 rounded-md mb-4 overflow-x-auto">
+                            <pre class="text-sm">
+-- 策略名称：允许删除教师数据
+-- 策略类型：DELETE
+-- 定义：
+(true)
+                            </pre>
+                        </div>
+                        
+                        <h4 class="font-medium text-lg mb-2">步骤5：保存策略</h4>
+                        <p class="mb-4">点击 "Save Policy" 按钮保存每个策略配置。</p>
+                        
+                        <h4 class="font-medium text-lg mb-2">替代方案：使用服务角色密钥（快速测试）</h4>
+                        <p class="mb-2">如果您想快速测试功能而不需要配置行级安全策略，可以使用服务角色密钥：</p>
+                        <ol class="list-decimal list-inside mb-4 space-y-2">
+                            <li>在Supabase控制台左侧菜单中点击 "Settings"（设置）</li>
+                            <li>选择 "API" 选项</li>
+                            <li>在 "Project API Keys" 部分，找到 "service_role" 密钥</li>
+                            <li>复制该密钥</li>
+                            <li>在本页面代码中取消注释第322行，并将密钥粘贴到引号中</li>
+                            <li>刷新页面后即可绕过行级安全策略</li>
+                        </ol>
+                        
+                        <div class="bg-red-50 border-l-4 border-red-400 p-3 mb-4">
+                            <p class="text-sm text-red-700">
+                                <strong>重要安全警告：</strong>服务角色密钥具有完全的数据库访问权限，请勿在生产环境或面向公众的应用中使用！
+                            </p>
+                        </div>
+                        
+                        <h4 class="font-medium text-lg mb-2">安全提示</h4>
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4">
+                            <p class="text-sm text-yellow-700">
+                                以上行级安全策略允许任何人访问和修改您的教师数据，适合开发和测试环境。在生产环境中，请配置更严格的策略，限制只有授权用户才能访问。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end pt-2">
+                    <button @click="showRulesModal = false" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        我已完成配置
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 页面标题和认证按钮 -->
+        <div class="mb-8 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-800">教师信息管理系统</h1>
+            <div class="flex space-x-4">
+                <div v-if="user" class="flex items-center space-x-2">
+                    <span class="text-gray-700">{{ user.email }}</span>
+                    <button @click="logout" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                        登出
+                    </button>
+                </div>
+                <div v-else>
+                    <button @click="showLoginModal = true" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        登录
+                    </button>
+                    <button @click="showRegisterModal = true" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        注册
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 未登录提示 -->
+        <div v-if="!user" class="bg-white rounded-lg shadow-md p-8 mb-8 text-center">
+            <svg class="mx-auto h-16 w-16 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <h2 class="text-2xl font-bold text-gray-800 mt-4 mb-2">请先登录</h2>
+            <p class="text-gray-600 mb-6">您需要登录才能访问教师信息管理功能</p>
+            <div class="flex justify-center space-x-4">
+                <button @click="showLoginModal = true" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    立即登录
+                </button>
+                <button @click="showRegisterModal = true" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                    注册账号
+                </button>
+            </div>
+        </div>
+
+        <!-- 添加教师表单 -->
+        <div v-if="user" class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">添加教师信息</h2>
+            <form @submit.prevent="addTeacher" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+                        <input 
+                            type="text" 
+                            id="name" 
+                            v-model="newTeacher.name" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="请输入姓名"
+                        >
+                    </div>
+                    <div>
+                        <label for="age" class="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                        <input 
+                            type="number" 
+                            id="age" 
+                            v-model.number="newTeacher.age" 
+                            min="20" 
+                            max="65" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="请输入年龄"
+                        >
+                    </div>
+                    <div>
+                        <label for="subject" class="block text-sm font-medium text-gray-700 mb-1">学科</label>
+                        <input 
+                            type="text" 
+                            id="subject" 
+                            v-model="newTeacher.subject" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="请输入学科"
+                        >
+                    </div>
+                    <div>
+                        <label for="contact" class="block text-sm font-medium text-gray-700 mb-1">联系方式</label>
+                        <input 
+                            type="text" 
+                            id="contact" 
+                            v-model="newTeacher.contact" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="请输入联系方式"
+                        >
+                    </div>
+                </div>
+                
+                <!-- 图片上传区域 -->
+                <div class="border-2 border-dashed border-gray-300 rounded-md p-4">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">教师头像</h3>
+                    <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                        <!-- 图片预览 -->
+                        <div v-if="previewUrl" class="w-32 h-32 bg-gray-100 rounded-md overflow-hidden">
+                            <img :src="previewUrl" alt="预览图" class="w-full h-full object-cover">
+                        </div>
+                        <div v-else class="w-32 h-32 bg-gray-100 rounded-md flex items-center justify-center">
+                            <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        
+                        <!-- 文件选择 -->
+                        <div class="flex-1 space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <input 
+                                    type="file" 
+                                    id="image" 
+                                    accept="image/*" 
+                                    @change="handleFileSelect" 
+                                    class="sr-only"
+                                >
+                                <label for="image" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                    选择图片
+                                </label>
+                                <button 
+                                    type="button" 
+                                    v-if="selectedFile" 
+                                    @click="removeFile" 
+                                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                                >
+                                    移除
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500">支持 JPG、PNG 格式，文件大小不超过 2MB</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button 
+                        type="submit" 
+                        :disabled="loading" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <span v-if="loading">添加中...</span>
+                        <span v-else>添加教师</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 查询和批量操作 -->
+        <div v-if="user" class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+                <div class="flex space-x-4">
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            v-model="searchQuery" 
+                            placeholder="搜索姓名或学科..." 
+                            class="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pl-10"
+                        >
+                        <svg class="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <select 
+                        v-model="searchBy" 
+                        class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        <option value="name">按姓名搜索</option>
+                        <option value="subject">按学科搜索</option>
+                    </select>
+                </div>
+                <button 
+                    @click="deleteSelected" 
+                    :disabled="selectedTeachers.length === 0 || loading" 
+                    class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span v-if="loading">删除中...</span>
+                    <span v-else>批量删除 ({{ selectedTeachers.length }})</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 教师列表 -->
+        <div v-if="user" class="bg-white rounded-lg shadow-md p-6">
+            <div v-if="loading" class="flex justify-center items-center py-12">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+            <div v-else-if="teachers.length === 0" class="text-center py-12 text-gray-500">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">暂无教师信息</h3>
+                <p class="mt-1 text-sm text-gray-500">点击"添加教师"按钮开始添加数据</p>
+            </div>
+            <div v-else class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <input 
+                                    type="checkbox" 
+                                    v-model="selectAll" 
+                                    @change="toggleSelectAll" 
+                                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                >
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">头像</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">姓名</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">年龄</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学科</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">联系方式</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr v-for="teacher in filteredTeachers" :key="teacher.id" class="hover:bg-gray-50 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <input 
+                                    type="checkbox" 
+                                    :value="teacher.id" 
+                                    v-model="selectedTeachers" 
+                                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                >
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="w-10 h-10 rounded-full overflow-hidden">
+                                    <img v-if="teacher.image" :src="teacher.image" alt="{{ teacher.name }}" class="w-full h-full object-cover">
+                                    <div v-else class="w-full h-full bg-gray-200 flex items-center justify-center">
+                                        <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">{{ teacher.name }}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-500">{{ teacher.age }}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-500">{{ teacher.subject }}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-500">{{ teacher.contact }}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button 
+                                    @click="deleteTeacher(teacher.id)" 
+                                    :disabled="loading" 
+                                    class="text-red-600 hover:text-red-900 mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    删除
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 消息提示 -->
+        <transition name="slide">
+            <div v-if="message" :class="['fixed bottom-4 right-4 px-4 py-3 rounded-md shadow-lg text-white', messageType === 'success' ? 'bg-green-500' : 'bg-red-500']">
+                {{ message }}
+            </div>
+        </transition>
+
+        <!-- 实时通知组件 -->
+        <div class="fixed top-4 right-4 z-50 space-y-2 max-w-md">
+            <transition-group name="notification" tag="div" class="space-y-2">
+                <div 
+                    v-for="notification in notifications" 
+                    :key="notification.id" 
+                    :class="[
+                        'p-4 rounded-md shadow-lg text-white transition-all duration-300 transform hover:translate-x-[-8px]',
+                        notification.type === 'success' ? 'bg-green-600' :
+                        notification.type === 'error' ? 'bg-red-600' :
+                        notification.type === 'warning' ? 'bg-yellow-600' :
+                        'bg-blue-600'
+                    ]"
+                >
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <span :class="[
+                                'inline-flex items-center justify-center h-8 w-8 rounded-full',
+                                notification.type === 'success' ? 'bg-green-500' :
+                                notification.type === 'error' ? 'bg-red-500' :
+                                notification.type === 'warning' ? 'bg-yellow-500' :
+                                'bg-blue-500'
+                            ]">
+                                <svg v-if="notification.type === 'success'" class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                                <svg v-else-if="notification.type === 'error'" class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                                <svg v-else-if="notification.type === 'warning'" class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                <svg v-else class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </span>
+                            <div>
+                                <p class="text-sm font-medium">{{ notification.message }}</p>
+                                <p class="text-xs opacity-80">{{ notification.timestamp.toLocaleTimeString() }}</p>
+                            </div>
+                        </div>
+                        <button 
+                            @click="removeNotification(notification.id)" 
+                            class="text-white opacity-70 hover:opacity-100 focus:outline-none"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </transition-group>
+        </div>
+        
+        <!-- 登录模态框 -->
+        <div v-if="showLoginModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-xl font-semibold text-gray-900">用户登录</h3>
+                    <button @click="closeLoginModal" class="text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-y-auto max-h-[70vh] p-2">
+                    <form @submit.prevent="login" class="space-y-4">
+                        <div v-if="authError" class="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded">
+                            {{ authError }}
+                        </div>
+                        <div>
+                            <label for="loginEmail" class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                            <input 
+                                type="email" 
+                                id="loginEmail" 
+                                v-model="loginForm.email" 
+                                required 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="请输入邮箱"
+                            >
+                        </div>
+                        <div>
+                            <label for="loginPassword" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                            <input 
+                                type="password" 
+                                id="loginPassword" 
+                                v-model="loginForm.password" 
+                                required 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="请输入密码"
+                            >
+                        </div>
+                        <div class="flex justify-end space-x-2">
+                            <button 
+                                type="button" 
+                                @click="closeLoginModal" 
+                                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                type="submit" 
+                                :disabled="loading" 
+                                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span v-if="loading">登录中...</span>
+                                <span v-else>登录</span>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="mt-4 text-center">
+                        <p class="text-sm text-gray-600">还没有账号？
+                            <button @click="switchToRegister" class="text-blue-600 hover:text-blue-800 font-medium">
+                                立即注册
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 注册模态框 -->
+        <div v-if="showRegisterModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-xl font-semibold text-gray-900">用户注册</h3>
+                    <button @click="closeRegisterModal" class="text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-y-auto max-h-[70vh] p-2">
+                    <form @submit.prevent="register" class="space-y-4">
+                        <div v-if="authError" class="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded">
+                            {{ authError }}
+                        </div>
+                        <div>
+                            <label for="registerEmail" class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                            <input 
+                                type="email" 
+                                id="registerEmail" 
+                                v-model="registerForm.email" 
+                                required 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="请输入邮箱"
+                            >
+                        </div>
+                        <div>
+                            <label for="registerPassword" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                            <input 
+                                type="password" 
+                                id="registerPassword" 
+                                v-model="registerForm.password" 
+                                required 
+                                minlength="6"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="请输入密码（至少6位）"
+                            >
+                        </div>
+                        <div>
+                            <label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-1">确认密码</label>
+                            <input 
+                                type="password" 
+                                id="confirmPassword" 
+                                v-model="registerForm.confirmPassword" 
+                                required 
+                                minlength="6"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="请再次输入密码"
+                            >
+                        </div>
+                        <div class="flex justify-end space-x-2">
+                            <button 
+                                type="button" 
+                                @click="closeRegisterModal" 
+                                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                type="submit" 
+                                :disabled="loading" 
+                                class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span v-if="loading">注册中...</span>
+                                <span v-else>注册</span>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="mt-4 text-center">
+                        <p class="text-sm text-gray-600">已有账号？
+                            <button @click="switchToLogin" class="text-blue-600 hover:text-blue-800 font-medium">
+                                立即登录
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化Vue应用
+        const app = Vue.createApp({
+            data() {
+                return {
+                    // Supabase配置
+                    supabaseUrl: 'https://uunvxxregycemnpiwoaz.supabase.co',
+                    // 发布密钥（适合生产环境，需要配置行级安全策略）
+                    supabaseKey: 'sb_publishable_dsWxtdwLnI_tH_nRKMe3zw_eYKIIhuX',
+                    // 服务角色密钥（适合测试环境，绕过行级安全策略 - 请勿在生产环境使用！）
+                    serviceRoleKey: 'sb_service_role_dsWxtdwLnI_tH_nRKMe3zw_eYKIIhuX',
+                    supabase: null,
+                    
+                    // 用户认证数据
+                    user: null,
+                    authError: '',
+                    registerForm: {
+                        email: '',
+                        password: '',
+                        confirmPassword: ''
+                    },
+                    loginForm: {
+                        email: '',
+                        password: ''
+                    },
+                    showLoginModal: false,
+                    showRegisterModal: false,
+                    
+                    // 教师数据
+                    teachers: [],
+                    newTeacher: {
+                        name: '',
+                        age: null,
+                        subject: '',
+                        contact: '',
+                        image: ''
+                    },
+                    // 图片上传相关
+                    selectedFile: null,
+                    previewUrl: '',
+                    
+                    // 搜索和过滤
+                    searchQuery: '',
+                    searchBy: 'name',
+                    
+                    // 批量操作
+                    selectedTeachers: [],
+                    selectAll: false,
+                    
+                    // 状态管理
+                    loading: false,
+                    message: '',
+                    messageType: 'success',
+                    showRulesModal: false,
+                    
+                    // Realtime相关配置
+                    realtimeSubscriptions: {},
+                    notifications: [],
+                    maxNotifications: 5,
+                    realtimeStatus: 'DISCONNECTED',
+                    showDebugModal: false
+                }
+            },
+            computed: {
+                // 过滤后的教师列表
+                filteredTeachers() {
+                    if (!this.searchQuery) {
+                        return this.teachers
+                    }
+                    
+                    const query = this.searchQuery.toLowerCase()
+                    return this.teachers.filter(teacher => {
+                        if (this.searchBy === 'name') {
+                            return teacher.name.toLowerCase().includes(query)
+                        } else if (this.searchBy === 'subject') {
+                            return teacher.subject.toLowerCase().includes(query)
+                        }
+                        return true
+                    })
+                }
+            },
+            mounted() {
+                // 初始化Supabase客户端
+                // 使用发布密钥进行客户端操作
+                this.supabase = supabase.createClient(this.supabaseUrl, this.supabaseKey)
+                
+                // 检查用户会话
+                this.checkUser()
+                
+                // 添加认证状态变化监听器
+                this.supabase.auth.onAuthStateChange((event, session) => {
+                    if (session) {
+                        this.user = session.user
+                    } else {
+                        this.user = null
+                    }
+                })
+                
+                // 加载教师数据
+                this.loadTeachers()
+                
+                // 设置Realtime订阅
+                this.setupRealtimeSubscriptions()
+            },
+            methods: {
+                // 加载教师数据
+                async loadTeachers() {
+                    this.loading = true
+                    try {
+                        const { data, error } = await this.supabase
+                            .from('teachers')
+                            .select('*')
+                            .order('created_at', { ascending: false })
+                        
+                        if (error) {
+                            console.error('Supabase错误详情:', error)
+                            throw error
+                        }
+                        
+                        this.teachers = data
+                    } catch (error) {
+                        this.showMessage('加载数据失败: ' + error.message + (error.details ? ' - ' + error.details : ''), 'error')
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 添加教师
+                async addTeacher() {
+                    // 检查用户是否已登录
+                    if (!this.user) {
+                        this.showMessage('请先登录', 'error')
+                        this.showLoginModal = true
+                        return
+                    }
+                    
+                    // 表单验证
+                    if (!this.newTeacher.name || !this.newTeacher.age || !this.newTeacher.subject || !this.newTeacher.contact) {
+                        this.showMessage('请填写所有必填字段', 'error')
+                        return
+                    }
+                    
+                    if (this.newTeacher.age < 20 || this.newTeacher.age > 65) {
+                        this.showMessage('年龄必须在20-65岁之间', 'error')
+                        return
+                    }
+                    
+                    this.loading = true
+                    try {
+                        // 如果有选择图片，先上传图片
+                        if (this.selectedFile) {
+                            const imageUrl = await this.uploadImage(this.selectedFile)
+                            if (imageUrl) {
+                                this.newTeacher.image = imageUrl
+                            }
+                        }
+                        
+                        const { data, error } = await this.supabase
+                            .from('teachers')
+                            .insert([this.newTeacher])
+                            .select()
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        // 重置表单
+                        this.newTeacher = {
+                            name: '',
+                            age: null,
+                            subject: '',
+                            contact: '',
+                            image: ''
+                        }
+                        this.removeFile()
+                        
+                        // 重新加载数据
+                        this.loadTeachers()
+                        this.showMessage('教师信息添加成功', 'success')
+                    } catch (error) {
+                        this.showMessage('添加失败: ' + error.message, 'error')
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 删除单条教师信息
+                async deleteTeacher(id) {
+                    if (!confirm('确定要删除这条教师信息吗？')) {
+                        return
+                    }
+                    
+                    this.loading = true
+                    try {
+                        const { error } = await this.supabase
+                            .from('teachers')
+                            .delete()
+                            .eq('id', id)
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        // 重新加载数据
+                        this.loadTeachers()
+                        this.showMessage('教师信息删除成功', 'success')
+                    } catch (error) {
+                        this.showMessage('删除失败: ' + error.message, 'error')
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 批量删除教师信息
+                async deleteSelected() {
+                    if (this.selectedTeachers.length === 0) {
+                        this.showMessage('请选择要删除的教师信息', 'error')
+                        return
+                    }
+                    
+                    if (!confirm(`确定要删除选中的 ${this.selectedTeachers.length} 条教师信息吗？`)) {
+                        return
+                    }
+                    
+                    this.loading = true
+                    try {
+                        const { error } = await this.supabase
+                            .from('teachers')
+                            .delete()
+                            .in('id', this.selectedTeachers)
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        // 重置选择
+                        this.selectedTeachers = []
+                        this.selectAll = false
+                        
+                        // 重新加载数据
+                        this.loadTeachers()
+                        this.showMessage('教师信息批量删除成功', 'success')
+                    } catch (error) {
+                        this.showMessage('批量删除失败: ' + error.message, 'error')
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 全选/取消全选
+                toggleSelectAll() {
+                    if (this.selectAll) {
+                        this.selectedTeachers = this.filteredTeachers.map(teacher => teacher.id)
+                    } else {
+                        this.selectedTeachers = []
+                    }
+                },
+                
+                // 显示消息提示
+                showMessage(message, type = 'success') {
+                    this.message = message
+                    this.messageType = type
+                    
+                    // 3秒后自动关闭消息
+                    setTimeout(() => {
+                        this.message = ''
+                    }, 3000)
+                },
+                
+                // 显示安全规则配置指南
+                showSecurityRules() {
+                    this.showRulesModal = true
+                },
+                
+                // 设置Realtime订阅
+                setupRealtimeSubscriptions() {
+                    // 清除现有的订阅
+                    Object.values(this.realtimeSubscriptions).forEach(sub => {
+                        sub.unsubscribe()
+                    })
+                    
+                    console.log('正在设置Realtime订阅...')
+                    
+                    // 订阅teachers表的INSERT和DELETE事件
+                    const subscription = this.supabase
+                        .channel('teachers-changes', {
+                            config: {
+                                presence: { 
+                                    key: 'user-' + Math.random().toString(36).substr(2, 9) 
+                                }
+                            }
+                        })
+                        .on(
+                            'postgres_changes',
+                            { event: '*', schema: 'public', table: 'teachers' },
+                            (payload) => {
+                                console.log('收到Realtime事件:', payload)
+                                this.handleRealtimeEvent(payload)
+                            }
+                        )
+                        .on(
+                            'presence',
+                            { event: 'sync' },
+                            () => {
+                                console.log('Presence同步完成')
+                            }
+                        )
+                        .on(
+                            'broadcast',
+                            { event: 'test' },
+                            (payload) => {
+                                console.log('收到广播消息:', payload)
+                            }
+                        )
+                        .subscribe((status) => {
+                            console.log('Realtime订阅状态:', status)
+                            this.realtimeStatus = status
+                            
+                            if (status === 'SUBSCRIBED') {
+                                console.log('Realtime订阅成功！')
+                            } else if (status === 'CHANNEL_ERROR') {
+                                console.error('Realtime频道错误')
+                                this.showMessage('Realtime频道错误', 'error')
+                            } else if (status === 'TIMED_OUT') {
+                                console.error('Realtime连接超时')
+                                this.showMessage('Realtime连接超时', 'error')
+                            } else if (status === 'CLOSED') {
+                                console.error('Realtime连接已关闭')
+                                this.showMessage('Realtime连接已关闭', 'error')
+                            }
+                        })
+                    
+                    // 存储订阅引用
+                    this.realtimeSubscriptions.teachers = subscription
+                    console.log('Realtime订阅已设置:', subscription)
+                },
+                
+                // 处理Realtime事件
+                handleRealtimeEvent(payload) {
+                    console.log('开始处理Realtime事件:', payload)
+                    
+                    try {
+                        const { eventType, new: newData, old: oldData } = payload
+                        let notification = {
+                            id: Date.now(),
+                            type: '',
+                            message: '',
+                            timestamp: new Date()
+                        }
+                        
+                        console.log('事件类型:', eventType)
+                        console.log('新数据:', newData)
+                        console.log('旧数据:', oldData)
+                        
+                        // 根据事件类型创建通知消息
+                        switch (eventType) {
+                            case 'INSERT':
+                                notification.type = 'success'
+                                notification.message = `教师"${newData.name}"已成功添加！`
+                                break
+                            case 'DELETE':
+                                notification.type = 'info'
+                                notification.message = `教师"${oldData.name}"已被删除！`
+                                break
+                            case 'UPDATE':
+                                notification.type = 'warning'
+                                notification.message = `教师"${oldData.name}"的信息已更新！`
+                                break
+                            default:
+                                console.log('未知事件类型:', eventType)
+                                return
+                        }
+                        
+                        console.log('创建的通知:', notification)
+                        
+                        // 添加到通知列表
+                        this.addNotification(notification)
+                        console.log('通知已添加到列表')
+                        
+                        // 如果是INSERT或DELETE事件，重新加载数据以保持同步
+                        if (eventType === 'INSERT' || eventType === 'DELETE') {
+                            console.log('正在重新加载教师数据...')
+                            this.loadTeachers()
+                        }
+                    } catch (error) {
+                        console.error('处理Realtime事件时出错:', error)
+                    }
+                },
+                
+                // 添加通知
+                addNotification(notification) {
+                    // 添加新通知到列表开头
+                    this.notifications.unshift(notification)
+                    
+                    // 限制通知数量
+                    if (this.notifications.length > this.maxNotifications) {
+                        this.notifications = this.notifications.slice(0, this.maxNotifications)
+                    }
+                    
+                    // 3秒后自动移除通知
+                    setTimeout(() => {
+                        this.removeNotification(notification.id)
+                    }, 3000)
+                },
+                
+                // 移除通知
+                removeNotification(id) {
+                    this.notifications = this.notifications.filter(notification => notification.id !== id)
+                },
+                
+                // 测试Realtime连接
+                testRealtimeConnection() {
+                    console.log('正在测试Realtime连接...')
+                    
+                    if (!this.supabase) {
+                        console.error('Supabase客户端未初始化')
+                        this.showMessage('Supabase客户端未初始化', 'error')
+                        return
+                    }
+                    
+                    // 重新设置订阅
+                    this.setupRealtimeSubscriptions()
+                    
+                    // 发送测试广播消息
+                    setTimeout(() => {
+                        this.supabase
+                            .channel('teachers-changes')
+                            .send({
+                                type: 'broadcast',
+                                event: 'test',
+                                payload: {
+                                    message: '测试广播消息',
+                                    timestamp: new Date().toISOString()
+                                }
+                            })
+                            .then((status) => {
+                                console.log('广播消息发送状态:', status)
+                                if (status === 'ok') {
+                                    this.showMessage('Realtime测试消息已发送', 'success')
+                                } else {
+                                    this.showMessage('Realtime测试消息发送失败', 'error')
+                                }
+                            })
+                    }, 1000)
+                },
+                
+                // 显示Realtime调试信息
+                showRealtimeDebug() {
+                    this.showDebugModal = true
+                },
+                
+                // 用户认证方法
+                // 注册功能
+                async register() {
+                    // 表单验证
+                    if (!this.registerForm.email || !this.registerForm.password) {
+                        this.authError = '请填写所有必填字段'
+                        return
+                    }
+                    
+                    if (this.registerForm.password !== this.registerForm.confirmPassword) {
+                        this.authError = '两次输入的密码不一致'
+                        return
+                    }
+                    
+                    if (this.registerForm.password.length < 6) {
+                        this.authError = '密码长度不能少于6位'
+                        return
+                    }
+                    
+                    this.loading = true
+                    this.authError = ''
+                    
+                    try {
+                        const { data, error } = await this.supabase.auth.signUp({
+                            email: this.registerForm.email,
+                            password: this.registerForm.password
+                        })
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        this.closeRegisterModal()
+                        this.showMessage('注册成功！请登录', 'success')
+                        this.switchToLogin()
+                        
+                        // 重置表单
+                        this.registerForm = {
+                            email: '',
+                            password: '',
+                            confirmPassword: ''
+                        }
+                    } catch (error) {
+                        this.authError = error.message
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 登录功能
+                async login() {
+                    // 表单验证
+                    if (!this.loginForm.email || !this.loginForm.password) {
+                        this.authError = '请填写所有必填字段'
+                        return
+                    }
+                    
+                    this.loading = true
+                    this.authError = ''
+                    
+                    try {
+                        const { data, error } = await this.supabase.auth.signInWithPassword({
+                            email: this.loginForm.email,
+                            password: this.loginForm.password
+                        })
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        this.user = data.user
+                        this.closeLoginModal()
+                        this.showMessage('登录成功！', 'success')
+                        
+                        // 重置表单
+                        this.loginForm = {
+                            email: '',
+                            password: ''
+                        }
+                    } catch (error) {
+                        this.authError = error.message
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 登出功能
+                async logout() {
+                    this.loading = true
+                    
+                    try {
+                        const { error } = await this.supabase.auth.signOut()
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        this.user = null
+                        this.showMessage('登出成功！', 'success')
+                    } catch (error) {
+                        this.showMessage('登出失败: ' + error.message, 'error')
+                    } finally {
+                        this.loading = false
+                    }
+                },
+                
+                // 关闭登录模态框
+                closeLoginModal() {
+                    this.showLoginModal = false
+                    this.authError = ''
+                    this.loginForm = {
+                        email: '',
+                        password: ''
+                    }
+                },
+                
+                // 关闭注册模态框
+                closeRegisterModal() {
+                    this.showRegisterModal = false
+                    this.authError = ''
+                    this.registerForm = {
+                        email: '',
+                        password: '',
+                        confirmPassword: ''
+                    }
+                },
+                
+                // 切换到登录模态框
+                switchToLogin() {
+                    this.showRegisterModal = false
+                    this.showLoginModal = true
+                    this.authError = ''
+                },
+                
+                // 切换到注册模态框
+                switchToRegister() {
+                    this.showLoginModal = false
+                    this.showRegisterModal = true
+                    this.authError = ''
+                },
+                
+                // 检查用户会话
+                async checkUser() {
+                    const { data } = await this.supabase.auth.getSession()
+                    if (data.session) {
+                        this.user = data.session.user
+                    }
+                },
+                
+                // 图片上传相关方法
+                // 处理文件选择
+                handleFileSelect(event) {
+                    const file = event.target.files[0]
+                    if (file) {
+                        // 检查文件大小（不超过2MB）
+                        if (file.size > 2 * 1024 * 1024) {
+                            this.showMessage('文件大小不能超过2MB', 'error')
+                            return
+                        }
+                        
+                        // 检查文件类型
+                        if (!file.type.startsWith('image/')) {
+                            this.showMessage('请选择图片文件', 'error')
+                            return
+                        }
+                        
+                        this.selectedFile = file
+                        
+                        // 生成预览URL
+                        const reader = new FileReader()
+                        reader.onload = (e) => {
+                            this.previewUrl = e.target.result
+                        }
+                        reader.readAsDataURL(file)
+                    }
+                },
+                
+                // 移除选择的文件
+                removeFile() {
+                    this.selectedFile = null
+                    this.previewUrl = ''
+                },
+                
+                // 上传图片到Supabase存储
+                async uploadImage(file) {
+                    try {
+                        // 生成唯一文件名
+                        const fileName = `${Date.now()}_${file.name}`
+                        
+                        // 上传文件到Supabase存储
+                        const { data, error } = await this.supabase.storage
+                            .from('xiaoming')
+                            .upload(fileName, file, {
+                                cacheControl: '3600',
+                                upsert: false
+                            })
+                        
+                        if (error) {
+                            throw error
+                        }
+                        
+                        // 确保获取正确的文件路径
+                        console.log('上传成功返回的数据:', data)
+                        
+                        // 获取文件路径
+                        const filePath = data.path || `${data.Key}` || ''
+                        if (!filePath) {
+                            console.error('无法获取文件路径', data)
+                            throw new Error('无法获取文件路径')
+                        }
+                        
+                        // 使用Supabase SDK生成带有签名的URL
+                        // 这种URL带有有效期，适合访问受保护的文件
+                        try {
+                            const { data: signedUrlData } = await this.supabase.storage
+                                .from('xiaoming')
+                                .createSignedUrl(filePath, 60 * 60 * 24) // 有效期24小时
+                            
+                            console.log('生成的签名URL:', signedUrlData.signedUrl)
+                            return signedUrlData.signedUrl
+                        } catch (signError) {
+                            console.error('生成签名URL失败:', signError)
+                            // 如果生成签名URL失败，尝试使用直接URL
+                            const directUrl = `${this.supabaseUrl}/storage/v1/object/${filePath}`
+                            console.log('回退到直接URL:', directUrl)
+                            return directUrl
+                        }
+                    } catch (error) {
+                        console.error('图片上传失败:', error)
+                        this.showMessage('图片上传失败: ' + error.message, 'error')
+                        return null
+                    }
+                }
+            }
+        })
+        
+        // 挂载Vue应用
+        app.mount('#app')
+    </script>
+</body>
+</html>
